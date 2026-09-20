@@ -6,23 +6,42 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from numpy.random import Generator
-from qjets.config import Config, DataConfig, RunConfig, RuntimeConfig, LOG_LEVELS
+from qjets.config import Config, DataConfig, PreprocessingConfig, RunConfig, RuntimeConfig, LOG_LEVELS
 from qjets.runtime.log import setup_logging
 from qjets.runtime.seeding import set_seed
 from qjets.runtime.timing import Timings
 from qjets.runtime.environment import collect
 from qjets.data.features import build_sample
 from qjets.data.root_io import load_jets_root
+from qjets.preprocessing import prepare_all
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Classical vs quantum SVM on LHC jet data", prog="qjets")
     parser = add_data_arguments(parser)
     parser = add_runtime_arguments(parser)
+    parser = add_preprocessing_arguments(parser)
 
     args = parser.parse_args()
-    runtime = RuntimeConfig(log_level=args.log_level, step_size=args.step_size, runs_dir=args.runs_dir)
-    dataconfig = DataConfig(top_k=args.top_k, resp_low=args.resp_low, resp_high=args.resp_high, n_samples=args.n_samples, path=args.path, tree_name=args.tree_name)
-    config = Config(run=RunConfig(seed=args.seed), data=dataconfig)
+
+    runtime = RuntimeConfig(
+        log_level=args.log_level, 
+        step_size=args.step_size, 
+        runs_dir=args.runs_dir)
+    
+    data = DataConfig(
+        top_k=args.top_k, 
+        resp_low=args.resp_low, 
+        resp_high=args.resp_high, 
+        n_samples=args.n_samples, 
+        path=args.path, 
+        tree_name=args.tree_name)
+
+    prep = PreprocessingConfig(
+        test_size=args.test_size,
+        qubit_dims=tuple(args.qubit_dims)
+    )
+    
+    config = Config(run=RunConfig(seed=args.seed), data=data, prep=prep)
 
     run_dir = create_run_dir(runtime, config)
     log = setup_logging(runtime.log_level, run_dir)
@@ -31,10 +50,19 @@ def main() -> None:
     timings = Timings()
 
     with timings.stage("load"):
-        X, y = load_jets_root(Path(config.data.path), config.data.tree_name, config.data.top_k, config.data.resp_low, config.data.resp_high, runtime.step_size)
+        X, y = load_jets_root(
+            Path(config.data.path), 
+            config.data.tree_name, 
+            config.data.top_k, 
+            config.data.resp_low, 
+            config.data.resp_high, 
+            runtime.step_size)
 
     with timings.stage("subsample"):
         X, y = build_sample(X, y, config.data.n_samples, rng)
+
+    with timings.stage("preprocess"):
+        datasets, y_train, y_test = prepare_all(X, y, config.prep, config.run.seed)
 
     with timings.stage("environment"):
         env = collect()
@@ -48,7 +76,6 @@ def add_data_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
     parser.add_argument("--n-samples", type=int, default=DataConfig.n_samples, help="Number of samples (default: %(default)s)")
     parser.add_argument("--path", type=str, default=DataConfig.path, help="Path (default: %(default)s)")
     parser.add_argument("--tree-name", type=str, default=DataConfig.tree_name, help="Tree name (default: %(default)s)")
-
     return parser
 
 def add_runtime_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -56,7 +83,11 @@ def add_runtime_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     parser.add_argument("--log-level", type=str, default=RuntimeConfig.log_level, choices=sorted(LOG_LEVELS), help="Logging level (default: %(default)s)")
     parser.add_argument("--step-size", type=int, default=RuntimeConfig.step_size, help="Step size (default: %(default)s)")
     parser.add_argument("--runs-dir", type=str, default=RuntimeConfig.runs_dir, help="Directory for runs (default: %(default)s)")
+    return parser
 
+def add_preprocessing_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument("--test-size", type=float, default=PreprocessingConfig.test_size, help="Test size (default: %(default)s)")
+    parser.add_argument("--qubit-dims", type=int, nargs="+", default=PreprocessingConfig.qubit_dims, help="Qubit dimensions (default: %(default)s)")
     return parser
 
 def create_run_dir(runtime: RuntimeConfig, config: Config) -> Path:
