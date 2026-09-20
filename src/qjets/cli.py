@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from numpy.random import Generator
-from qjets.config import Config, DataConfig, PreprocessingConfig, RunConfig, RuntimeConfig, LOG_LEVELS
+from qjets.config import Config, DataConfig, PreprocessingConfig, ModelConfig, RunConfig, RuntimeConfig, LOG_LEVELS
 from qjets.runtime.log import setup_logging
 from qjets.runtime.seeding import set_seed
 from qjets.runtime.timing import Timings
@@ -14,12 +14,14 @@ from qjets.runtime.environment import collect
 from qjets.data.features import build_sample
 from qjets.data.root_io import load_jets_root
 from qjets.preprocessing import prepare_all
+from qjets.models.classical import run_baseline
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Classical vs quantum SVM on LHC jet data", prog="qjets")
     parser = add_data_arguments(parser)
     parser = add_runtime_arguments(parser)
     parser = add_preprocessing_arguments(parser)
+    parser = add_model_arguments(parser)
 
     args = parser.parse_args()
 
@@ -40,8 +42,13 @@ def main() -> None:
         test_size=args.test_size,
         qubit_dims=tuple(args.qubit_dims)
     )
+
+    model = ModelConfig(
+        cv_folds=args.cv_folds,
+        scoring=args.scoring
+    )
     
-    config = Config(run=RunConfig(seed=args.seed), data=data, prep=prep)
+    config = Config(run=RunConfig(seed=args.seed), data=data, prep=prep, model=model)
 
     run_dir = create_run_dir(runtime, config)
     log = setup_logging(runtime.log_level, run_dir)
@@ -64,10 +71,13 @@ def main() -> None:
     with timings.stage("preprocess"):
         datasets, y_train, y_test = prepare_all(X, y, config.prep, config.run.seed)
 
+    with timings.stage("classical"):
+        results = run_baseline(datasets, y_train, y_test, config.model, config.run.seed)
+
     with timings.stage("environment"):
         env = collect()
 
-    json_dump(run_dir, config, env, timings)
+    json_dump(run_dir, config, env, timings, results)
 
 def add_data_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--top-k", type=int, default=DataConfig.top_k, help="Top k (default: %(default)s)")
@@ -90,6 +100,11 @@ def add_preprocessing_arguments(parser: argparse.ArgumentParser) -> argparse.Arg
     parser.add_argument("--qubit-dims", type=int, nargs="+", default=PreprocessingConfig.qubit_dims, help="Qubit dimensions (default: %(default)s)")
     return parser
 
+def add_model_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument("--cv-folds", type=int, default=ModelConfig.cv_folds, help="Number of CV folds (default: %(default)s)")
+    parser.add_argument("--scoring", type=str, default=ModelConfig.scoring, help="Scoring metric (default: %(default)s)")
+    return parser
+
 def create_run_dir(runtime: RuntimeConfig, config: Config) -> Path:
     now = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = Path(runtime.runs_dir) / f"{now}-{config.config_hash()}"
@@ -101,7 +116,7 @@ def create_rng(config: Config, log: logging.Logger) -> Generator:
     log.info("Running with seed %s", config.run.seed)
     return rng
 
-def json_dump(run_dir: Path, config: Config, env: dict, timings: Timings) -> None:
+def json_dump(run_dir: Path, config: Config, env: dict, timings: Timings, results: dict) -> None:
     with (run_dir / "config.json").open("w") as f:
         json.dump(asdict(config), f, indent=2)
 
@@ -110,3 +125,6 @@ def json_dump(run_dir: Path, config: Config, env: dict, timings: Timings) -> Non
     
     with (run_dir / "timings.json").open("w") as f:
         json.dump(timings.as_dict(), f, indent=2)
+
+    with (run_dir / "results.json").open("w") as f:
+        json.dump(results, f, indent=2, default=float)
