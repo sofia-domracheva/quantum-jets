@@ -1,0 +1,12 @@
+runs/
+*.root
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+bench/
+*:Zone.Identifier
