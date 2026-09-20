@@ -2,7 +2,6 @@ import hashlib
 import json
 import numpy as np
 from dataclasses import dataclass, asdict, field
-from pathlib import Path
 
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
@@ -51,6 +50,23 @@ class DataConfig:
             raise ValueError("tree_name must be non-empty")
 
 @dataclass(frozen=True)
+class ModelConfig:
+    c_grid: tuple[float, ...] = (0.1, 1.0, 10.0, 100.0)
+    gamma_grid: tuple[float | str, ...] = ("scale", 0.01, 0.1, 1.0)
+    cv_folds: int = 5
+    scoring: str = "roc_auc"
+
+    def __post_init__(self) -> None:
+        if len(self.c_grid) == 0:
+            raise ValueError("c_grid must be non-empty")
+
+        if len(self.gamma_grid) == 0:
+            raise ValueError("gamma_grid must be non-empty")
+
+        if self.cv_folds < 2:
+            raise ValueError("cv_folds must be positive and minimum is 2")
+
+@dataclass(frozen=True)
 class PreprocessingConfig:
     test_size: float = 0.2
     qubit_dims: tuple[int, ...] = (4, 6, 8)
@@ -82,6 +98,7 @@ class Config:
     run: RunConfig = field(default_factory=RunConfig)
     data: DataConfig = field(default_factory=DataConfig)
     prep: PreprocessingConfig = field(default_factory=PreprocessingConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
 
     def config_hash(self) -> str:
         data = asdict(self)

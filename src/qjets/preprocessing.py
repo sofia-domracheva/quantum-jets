@@ -34,6 +34,7 @@ def prepare_all(X: np.ndarray, y: np.ndarray, config: PreprocessingConfig, seed:
     transformed_train_pipeline = train_pipeline.transform(X_train)
     transformed_test_pipeline = train_pipeline.transform(X_test)
     low_high = config.encoding_range_rad()
+    explained = train_pipeline.named_steps["pca"].explained_variance_ratio_
     result = {}
     for q in config.qubit_dims:
         sliced_train = slice_dims(transformed_train_pipeline, q)
@@ -44,5 +45,6 @@ def prepare_all(X: np.ndarray, y: np.ndarray, config: PreprocessingConfig, seed:
         test_ang, frac_test = to_angles(minmax_train, sliced_test, low_high)
         result[q] = {"train":train_ang, "test":test_ang}
 
-        log.info(f"Qubit {q}: {frac_train:.2%} train, {frac_test:.2%} test")
+        explained_var = explained[:q].sum()
+        log.info(f"Qubit {q}: {frac_train:.2%} train, {frac_test:.2%} test, explained var: {explained_var:.2%}")
     return result, y_train, y_test
