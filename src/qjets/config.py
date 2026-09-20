@@ -1,5 +1,6 @@
 import hashlib
 import json
+import numpy as np
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
@@ -50,6 +51,25 @@ class DataConfig:
             raise ValueError("tree_name must be non-empty")
 
 @dataclass(frozen=True)
+class PreprocessingConfig:
+    test_size: float = 0.2
+    qubit_dims: tuple[int, ...] = (4, 6, 8)
+    encoding_range: tuple[float, float] = (0.0, 2.0)
+
+    def __post_init__(self) -> None:
+        if self.test_size <= 0 or self.test_size >= 1:
+            raise ValueError("test_size must be between 0 and 1")
+
+        if len(self.qubit_dims) == 0:
+            raise ValueError("qubit_dims must be non-empty")
+
+        if any(d <= 0 for d in self.qubit_dims):
+            raise ValueError("qubit_dims must be positive")
+
+    def encoding_range_rad(self) -> tuple[float, float]:
+        return (self.encoding_range[0] * np.pi, self.encoding_range[1] * np.pi)
+
+@dataclass(frozen=True)
 class RunConfig:
     seed: int = 42
 
@@ -61,6 +81,7 @@ class RunConfig:
 class Config:
     run: RunConfig = field(default_factory=RunConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    prep: PreprocessingConfig = field(default_factory=PreprocessingConfig)
 
     def config_hash(self) -> str:
         data = asdict(self)
