@@ -4,6 +4,9 @@ import numpy as np
 from dataclasses import dataclass, asdict, field
 
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+DEVICES = frozenset({"CPU", "GPU", "auto"})
+ENTANGLEMENTS = frozenset({"linear", "circular", "full"})
+KERNEL = frozenset({"rbf", "linear", "all"})
 
 @dataclass(frozen=True)
 class RuntimeConfig:
@@ -55,6 +58,7 @@ class ModelConfig:
     gamma_grid: tuple[float | str, ...] = ("scale", 0.01, 0.1, 1.0)
     cv_folds: int = 5
     scoring: str = "roc_auc"
+    kernel: str = "rbf"
 
     def __post_init__(self) -> None:
         if len(self.c_grid) == 0:
@@ -65,6 +69,9 @@ class ModelConfig:
 
         if self.cv_folds < 2:
             raise ValueError("cv_folds must be positive and minimum is 2")
+
+        if self.kernel not in KERNEL:
+            raise ValueError("kernel must be one of " + ", ".join(sorted(KERNEL)))
 
 @dataclass(frozen=True)
 class PreprocessingConfig:
@@ -86,6 +93,26 @@ class PreprocessingConfig:
         return (self.encoding_range[0] * np.pi, self.encoding_range[1] * np.pi)
 
 @dataclass(frozen=True)
+class QuantumConfig:
+    reps: int = 2
+    entanglement: str = "linear"
+    device: str = "auto"
+    batch_size: int = 256
+
+    def __post_init__(self) -> None:
+        if self.reps <= 0:
+            raise ValueError("reps must be positive")
+
+        if self.entanglement not in ENTANGLEMENTS:
+            raise ValueError("entanglement must be one of " + ", ".join(sorted(ENTANGLEMENTS)))
+
+        if self.device not in DEVICES:
+            raise ValueError("device must be one of " + ", ".join(sorted(DEVICES)))
+
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+@dataclass(frozen=True)
 class RunConfig:
     seed: int = 42
 
@@ -99,6 +126,7 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     prep: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
+    quantum: QuantumConfig = field(default_factory=QuantumConfig)
 
     def config_hash(self) -> str:
         data = asdict(self)

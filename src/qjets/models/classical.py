@@ -7,8 +7,8 @@ from qjets.config import ModelConfig
 
 log = logging.getLogger(__name__)
 
-def fit_classical(X_train: np.ndarray, y_train: np.ndarray, config: ModelConfig, seed: int) -> GridSearchCV:
-    svc = SVC(kernel="rbf")
+def fit_classical(X_train: np.ndarray, y_train: np.ndarray, config: ModelConfig, kernel: str, seed: int) -> GridSearchCV:
+    svc = SVC(kernel=kernel)
     param_grid = {"C": list(config.c_grid), "gamma": list(config.gamma_grid)}
     cv = StratifiedKFold(n_splits=config.cv_folds, shuffle=True, random_state=seed)
     grid = GridSearchCV(svc, param_grid, cv=cv, scoring=config.scoring, n_jobs=-1)
@@ -25,10 +25,19 @@ def evaluate(model: GridSearchCV, X_test: np.ndarray, y_test: np.ndarray) -> dic
     }
 
 def run_baseline(datasets: dict[int, dict[str, np.ndarray]], y_train: np.ndarray, y_test: np.ndarray, config: ModelConfig, seed: int) -> dict[int, dict]:
-    results = {} 
-    for n, data in datasets.items():
-        model = fit_classical(data["train"], y_train, config, seed)
-        metrics = evaluate(model, data["test"], y_test)
-        results[n] = {"metrics": metrics, "best_params": model.best_params_, "cv_score": model.best_score_}
-        log.info(f"Results for {n} qubits: {metrics}, best params: {model.best_params_}, cv score: {model.best_score_}")
+    results = {}
+
+    kernel = config.kernel
+    if kernel == "all":
+        kernels = ["rbf", "linear"]
+    else:
+        kernels = [kernel]
+
+    for kernel in kernels:
+        results[kernel] = {}
+        for n, data in datasets.items():
+            model = fit_classical(data["train"], y_train, config, kernel, seed)
+            metrics = evaluate(model, data["test"], y_test)
+            results[kernel][n] = {"metrics": metrics, "best_params": model.best_params_, "cv_score": model.best_score_}
+            log.info(f"Results for kernel {kernel} and {n} qubits: {metrics}, best params: {model.best_params_}, cv score: {model.best_score_}")
     return results

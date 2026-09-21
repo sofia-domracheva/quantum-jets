@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from numpy.random import Generator
-from qjets.config import Config, DataConfig, PreprocessingConfig, ModelConfig, RunConfig, RuntimeConfig, LOG_LEVELS
+from qjets.config import Config, DataConfig, PreprocessingConfig, ModelConfig, QuantumConfig, RunConfig, RuntimeConfig, LOG_LEVELS
 from qjets.runtime.log import setup_logging
 from qjets.runtime.seeding import set_seed
 from qjets.runtime.timing import Timings
@@ -15,6 +15,7 @@ from qjets.data.features import build_sample
 from qjets.data.root_io import load_jets_root
 from qjets.preprocessing import prepare_all
 from qjets.models.classical import run_baseline
+from qjets.kernels.statevector import run_quantum
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Classical vs quantum SVM on LHC jet data", prog="qjets")
@@ -22,6 +23,7 @@ def main() -> None:
     parser = add_runtime_arguments(parser)
     parser = add_preprocessing_arguments(parser)
     parser = add_model_arguments(parser)
+    parser = add_quantum_arguments(parser)
 
     args = parser.parse_args()
 
@@ -45,10 +47,18 @@ def main() -> None:
 
     model = ModelConfig(
         cv_folds=args.cv_folds,
-        scoring=args.scoring
+        scoring=args.scoring,
+        kernel=args.kernel
+    )
+
+    quantum = QuantumConfig(
+        reps=args.reps,
+        entanglement=args.entanglement,
+        device=args.device,
+        batch_size=args.batch_size
     )
     
-    config = Config(run=RunConfig(seed=args.seed), data=data, prep=prep, model=model)
+    config = Config(run=RunConfig(seed=args.seed), data=data, prep=prep, model=model, quantum=quantum)
 
     run_dir = create_run_dir(runtime, config)
     log = setup_logging(runtime.log_level, run_dir)
@@ -72,11 +82,18 @@ def main() -> None:
         datasets, y_train, y_test = prepare_all(X, y, config.prep, config.run.seed)
 
     with timings.stage("classical"):
-        results = run_baseline(datasets, y_train, y_test, config.model, config.run.seed)
+        classical_results = run_baseline(datasets, y_train, y_test, config.model, config.run.seed)
+
+    with timings.stage("quantum"):
+        quantum_results = run_quantum(datasets, y_train, y_test, config.quantum, config.run.seed)
 
     with timings.stage("environment"):
         env = collect()
 
+    results = {
+        "classical": classical_results,
+        "quantum": quantum_results
+    }
     json_dump(run_dir, config, env, timings, results)
 
 def add_data_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -103,6 +120,14 @@ def add_preprocessing_arguments(parser: argparse.ArgumentParser) -> argparse.Arg
 def add_model_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--cv-folds", type=int, default=ModelConfig.cv_folds, help="Number of CV folds (default: %(default)s)")
     parser.add_argument("--scoring", type=str, default=ModelConfig.scoring, help="Scoring metric (default: %(default)s)")
+    parser.add_argument("--kernel", type=str, default=ModelConfig.kernel, help="Kernel (default: %(default)s)")
+    return parser
+
+def add_quantum_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument("--reps", type=int, default=QuantumConfig.reps, help="Number of reps (default: %(default)s)")
+    parser.add_argument("--entanglement", type=str, default=QuantumConfig.entanglement, help="Entanglement (default: %(default)s)")
+    parser.add_argument("--device", type=str, default=QuantumConfig.device, help="Device (default: %(default)s)")
+    parser.add_argument("--batch-size", type=int, default=QuantumConfig.batch_size, help="Batch size (default: %(default)s)")
     return parser
 
 def create_run_dir(runtime: RuntimeConfig, config: Config) -> Path:
