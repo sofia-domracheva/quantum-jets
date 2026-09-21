@@ -1,6 +1,7 @@
 # quantum-jets
 
 Classical SVM vs quantum kernel SVM on jet data from the ATLAS Open Data.
+Code for the ICAI'26 paper.
 
 Each event gets a label: 1 if the leading jet is well reconstructed (reco pT / truth pT
 between 0.9 and 1.1), 0 otherwise. The features are pt, eta, phi and m of the three
@@ -23,6 +24,8 @@ CERN Open Data Portal. DOI: 10.7483/OPENDATA.ATLAS.L806.5CKU
 Python 3.10 or newer. The file is read with uproot.
 
 ```
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -e .
 ```
 
@@ -37,8 +40,8 @@ Some options:
 ```
 python -m qjets --kernel all          # RBF and linear SVM
 python -m qjets --qubit-dims 4 6      # which PCA dimensions to run
-python -m qjets --n-samples 10000     # size of the samples
-python -m qjets --device GPU          # GPU simulator, if available (CPU is the default)
+python -m qjets --n-samples 10000     # size of the balanced sample
+python -m qjets --device CPU          # CPU, GPU or auto (auto is the default and picks the CPU)
 ```
 
 All options: `python -m qjets --help`
@@ -63,9 +66,23 @@ grows, so the kernel matrix gets close to the identity matrix.
 The classical SVM parameters (C and gamma) are chosen by 5-fold cross-validation on the
 training set. The quantum SVM uses C = 1.
 
+The paper does no tuning at all, C = 1 everywhere. With cross-validation the classical
+AUC changes only in the third decimal, so the rounded table is the same for both settings.
+
+## The ROOT reader
+
+The numbers in the paper were produced with PyROOT. This package reads with uproot
+instead, so that `pip install -e .` works without a ROOT build. Next step is to make the
+reader a backend you can switch, with a second implementation over ROOT/RDataFrame, and
+check that both give the same X and y on the same file.
+
+The noisy simulation and the run on IBM hardware are in the paper but not yet in this
+package.
 
 ## TODO
 
 - noisy simulation with a device noise model
 - run on IBM quantum hardware
+- ROOT/RDataFrame reader next to the uproot one
+- a switch for the paper settings (C = 1, no cross-validation)
 - tests and CI
