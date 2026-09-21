@@ -28,11 +28,11 @@ def filter_chunk(chunk: ak.Array, top_k: int) -> ak.Array:
 
 def column_block(filtered_chunk: ak.Array, top_k: int, branch: str, is_mev: bool) -> np.ndarray:
     values = filtered_chunk[branch]
-    values = values[:, :top_k]
+    values = (ak.to_numpy(values[:, :top_k])).astype(np.float64)
     if is_mev:
         values = values / MEV_TO_GEV
 
-    return ak.to_numpy(values)
+    return values
 
 
 def build_features(filtered_chunk: ak.Array, top_k: int) -> np.ndarray:
@@ -44,7 +44,7 @@ def build_features(filtered_chunk: ak.Array, top_k: int) -> np.ndarray:
 
     pt = get_pt(filtered_chunk)
     njets = ak.to_numpy(ak.num(pt))
-    HT = ak.to_numpy(ak.sum(pt, axis=1) / MEV_TO_GEV) 
+    HT = ak.to_numpy(ak.sum(ak.values_astype(pt, np.float64), axis=1) / MEV_TO_GEV) 
     np_result = np.column_stack((reshaped, njets, HT))
 
     return np_result

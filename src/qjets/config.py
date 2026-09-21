@@ -54,7 +54,7 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    c_grid: tuple[float, ...] = (0.1, 1.0, 10.0, 100.0)
+    c_grid: tuple[float, ...] = (1.0)
     gamma_grid: tuple[float | str, ...] = ("scale", 0.01, 0.1, 1.0)
     cv_folds: int = 5
     scoring: str = "roc_auc"
