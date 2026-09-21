@@ -9,7 +9,9 @@ log = logging.getLogger(__name__)
 
 def fit_classical(X_train: np.ndarray, y_train: np.ndarray, config: ModelConfig, kernel: str, seed: int) -> GridSearchCV:
     svc = SVC(kernel=kernel)
-    param_grid = {"C": list(config.c_grid), "gamma": list(config.gamma_grid)}
+    param_grid = {"C": list(config.c_grid)}
+    if kernel == "rbf":
+        param_grid["gamma"] = list(config.gamma_grid)
     cv = StratifiedKFold(n_splits=config.cv_folds, shuffle=True, random_state=seed)
     grid = GridSearchCV(svc, param_grid, cv=cv, scoring=config.scoring, n_jobs=-1)
     grid.fit(X_train, y_train)

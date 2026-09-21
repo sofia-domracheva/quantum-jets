@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qjets"
 version = "0.1.0"
-dependencies = ["numpy", "uproot", "awkward", "scikit-learn"]
+dependencies = ["numpy", "uproot>=5", "awkward>=2", "scikit-learn", "qiskit>=2.0,<3", "qiskit-aer>=0.17"]
 requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]

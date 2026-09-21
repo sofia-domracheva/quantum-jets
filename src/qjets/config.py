@@ -13,6 +13,8 @@ class RuntimeConfig:
     runs_dir: str = "runs"
     log_level: str = "INFO"
     step_size: int = 1000
+    device: str = "auto"
+    batch_size: int = 256
 
     def __post_init__(self) -> None:
         if self.log_level not in LOG_LEVELS:
@@ -20,6 +22,12 @@ class RuntimeConfig:
 
         if self.step_size <= 0:
             raise ValueError("step_size must be positive")
+
+        if self.device not in DEVICES:
+            raise ValueError("device must be one of " + ", ".join(sorted(DEVICES)))
+
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be positive")
 
 @dataclass(frozen=True)
 class DataConfig:
@@ -96,9 +104,6 @@ class PreprocessingConfig:
 class QuantumConfig:
     reps: int = 2
     entanglement: str = "linear"
-    device: str = "auto"
-    batch_size: int = 256
-
     def __post_init__(self) -> None:
         if self.reps <= 0:
             raise ValueError("reps must be positive")
@@ -106,11 +111,6 @@ class QuantumConfig:
         if self.entanglement not in ENTANGLEMENTS:
             raise ValueError("entanglement must be one of " + ", ".join(sorted(ENTANGLEMENTS)))
 
-        if self.device not in DEVICES:
-            raise ValueError("device must be one of " + ", ".join(sorted(DEVICES)))
-
-        if self.batch_size <= 0:
-            raise ValueError("batch_size must be positive")
 
 @dataclass(frozen=True)
 class RunConfig:

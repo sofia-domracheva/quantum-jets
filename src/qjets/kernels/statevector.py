@@ -3,7 +3,8 @@ import numpy as np
 from sklearn.svm import SVC
 from qiskit_aer import AerSimulator
 from qiskit.compiler import transpile
-from qiskit.circuit.library import ZZFeatureMap
+from qiskit.circuit.library import zz_feature_map
+from qiskit.circuit import QuantumCircuit
 from qjets.kernels.feature_maps import build_feature_map
 from qjets.models.classical import evaluate
 from qjets.config import QuantumConfig
@@ -14,17 +15,17 @@ log = logging.getLogger(__name__)
 def make_simulator(device: str) -> AerSimulator:
     available_devices = AerSimulator().available_devices()
     if device == "auto":
-        if "GPU" in available_devices:
-            device = "GPU"
-        else:
+        if "CPU" in available_devices:
             device = "CPU"
+        else:
+            device = "GPU"
     elif device == "GPU":
         if "GPU" not in available_devices:
             log.warning("GPU device not available, falling back to CPU")
             device = "CPU"
     return AerSimulator(method="statevector", device=device)
 
-def statevectors(feature_map: ZZFeatureMap, X: np.ndarray, simulator: AerSimulator, batch_size: int) -> np.ndarray:
+def statevectors(feature_map: QuantumCircuit, X: np.ndarray, simulator: AerSimulator, batch_size: int) -> np.ndarray:
     quantum_circuit = feature_map.copy()
     quantum_circuit.save_statevector()
     quantum_circuit = transpile(quantum_circuit, simulator)
@@ -41,14 +42,14 @@ def statevectors(feature_map: ZZFeatureMap, X: np.ndarray, simulator: AerSimulat
 def kernel_matrix(V1: np.ndarray, V2: np.ndarray) -> np.ndarray:
     return np.abs(np.dot(V1.conj(), V2.T))**2
 
-def run_quantum(datasets: dict[int, dict[str, np.ndarray]], y_train: np.ndarray, y_test: np.ndarray, config: QuantumConfig, seed: int) -> dict[int, dict]:
+def run_quantum(datasets: dict[int, dict[str, np.ndarray]], y_train: np.ndarray, y_test: np.ndarray, device: str, batch_size: int, config: QuantumConfig, seed: int) -> dict[int, dict]:
     results = {}
-    simulator = make_simulator(config.device)
+    simulator = make_simulator(device)
     for n, data in datasets.items():
         feature_map = build_feature_map(n, config.reps, config.entanglement)
 
-        test_state = statevectors(feature_map, data["test"], simulator, config.batch_size)
-        train_state = statevectors(feature_map, data["train"], simulator, config.batch_size)
+        test_state = statevectors(feature_map, data["test"], simulator, batch_size)
+        train_state = statevectors(feature_map, data["train"], simulator, batch_size)
 
         test_matrix = kernel_matrix(test_state, train_state)
         train_matrix = kernel_matrix(train_state, train_state)

@@ -9,7 +9,8 @@ PACKAGES = (
     "qiskit",
     "qiskit-aer",
     "qiskit-ibm-runtime",
-    "uproot")
+    "uproot",
+    "awkward",)
 
 def environment() -> dict[str, object]:
     return {
